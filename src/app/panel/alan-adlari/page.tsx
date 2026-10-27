@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatTarih } from "@/lib/format";
+import { formatSayi, formatTarih } from "@/lib/format";
 import { SAGLAYICI_ETIKETLERI, type RozetRengi } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
+import { kayitliWhmHesaplari } from "@/lib/providers/whm";
 import { requirePermission } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Alan Adları & Hosting" };
@@ -44,6 +45,8 @@ export default async function AlanAdlariSayfasi() {
       include: { providerAccount: { select: { label: true, kind: true } } },
     }),
   ]);
+
+  const whm = await kayitliWhmHesaplari();
 
   const simdi = Date.now();
   const otuzGunIcinde = alanAdlari.filter(
@@ -136,6 +139,59 @@ export default async function AlanAdlariSayfasi() {
                     </TableRow>
                   );
                 })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Reseller Hosting Hesapları (WHM)</CardTitle>
+          <CardDescription>
+            {whm.hesaplar
+              ? `${whm.hesaplar.length} hesap, ${whm.hesaplar.filter((h) => h.askida).length} askıda · canlı okunur`
+              : "OWeb reseller hosting sunucusundaki hesaplar"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {whm.hata ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">{whm.hata}</p>
+          ) : !whm.hesaplar ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              WHM bağlantısı tanımlı değil. Sunucuda provider-anahtar.sh betiğiyle 5 numaralı seçeneği çalıştırın.
+            </p>
+          ) : whm.hesaplar.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">Reseller hesabında hosting hesabı yok.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Alan Adı</TableHead>
+                  <TableHead>Kullanıcı</TableHead>
+                  <TableHead>Paket</TableHead>
+                  <TableHead className="text-right">Disk Kullanımı</TableHead>
+                  <TableHead>Oluşturma</TableHead>
+                  <TableHead>Durum</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {whm.hesaplar.map((h) => (
+                  <TableRow key={h.kullanici}>
+                    <TableCell className="font-medium">{h.alanAdi}</TableCell>
+                    <TableCell className="font-mono text-xs">{h.kullanici}</TableCell>
+                    <TableCell>{h.paket}</TableCell>
+                    <TableCell className="whitespace-nowrap text-right">
+                      {formatSayi(h.diskKullanilanMb)} MB / {h.diskLimitMb == null ? "Sınırsız" : `${formatSayi(h.diskLimitMb)} MB`}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">{h.olusturma ? formatTarih(h.olusturma) : "-"}</TableCell>
+                    <TableCell>
+                      <Badge variant={h.askida ? "destructive" : "success"} title={h.askiNedeni ?? undefined}>
+                        {h.askida ? "Askıda" : "Aktif"}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           )}

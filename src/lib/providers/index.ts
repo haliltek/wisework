@@ -5,6 +5,7 @@ import { cloudflareEsitle } from "./cloudflare";
 import { digitalOceanEsitle } from "./digitalocean";
 import { domainNameApiEsitle } from "./domainnameapi";
 import { openRouterEsitle } from "./openrouter";
+import { whmEsitle } from "./whm";
 
 type Esitleyici = (hesapId: string, anahtar: string) => Promise<string>;
 
@@ -14,6 +15,7 @@ const ESITLEYICILER: Partial<Record<ProviderKind, Esitleyici>> = {
   OPENROUTER: openRouterEsitle,
   CLOUDFLARE: cloudflareEsitle,
   DOMAINNAMEAPI: domainNameApiEsitle,
+  OTHER: whmEsitle, // Şimdilik yalnızca cPanel/WHM (OWeb reseller) 'OTHER' türünde eşitlenir
 };
 
 export function esitlenebilirMi(kind: ProviderKind): boolean {

@@ -25,7 +25,8 @@ const paket = ["v1", iv.toString("base64"), sifreleyici.getAuthTag().toString("b
 let ipucuKaynagi = deger;
 if (process.argv[2] === "json") {
   try {
-    ipucuKaynagi = String(JSON.parse(deger).apiKey ?? "");
+    const j = JSON.parse(deger);
+    ipucuKaynagi = String(j.apiKey ?? j.token ?? "");
   } catch {
     console.error("HATA: Değer geçerli bir JSON değil.");
     process.exit(1);
