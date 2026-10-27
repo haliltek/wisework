@@ -354,13 +354,9 @@ export default async function ProjeDetaySayfasi({
                   className="flex w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 sm:col-span-2">
                 <Label htmlFor="v-tek">Teknolojiler (virgülle ayırın)</Label>
                 <Input id="v-tek" name="teknolojiler" defaultValue={proje.techStack.join(", ")} placeholder="Next.js, PostgreSQL, Docker" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="v-fiyat">Liste fiyatı</Label>
-                <Input id="v-fiyat" name="fiyat" inputMode="decimal" defaultValue={String(proje.basePrice)} />
               </div>
               <div className="space-y-1.5 sm:col-span-2">
                 <Label htmlFor="v-demo">Canlı demo adresi</Label>

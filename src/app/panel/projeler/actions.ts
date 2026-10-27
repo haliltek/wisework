@@ -371,13 +371,11 @@ export async function vitrinKaydetAction(formVerisi: FormData): Promise<void> {
   const ozet = metin(formVerisi, "ozet");
   const tanitim = metin(formVerisi, "tanitim");
   const demoUrl = metin(formVerisi, "demoUrl");
-  const fiyat = Number(metin(formVerisi, "fiyat").replace(",", "."));
   const sektorId = metin(formVerisi, "sektorId");
 
   if (!baslik || baslik.length > 120) bildir(slug, "hata", "Proje adı zorunludur (en fazla 120 karakter).");
   if (!ozet || ozet.length > 200) bildir(slug, "hata", "Kısa açıklama zorunludur (en fazla 200 karakter).");
   if (tanitim.length > 5000) bildir(slug, "hata", "Ayrıntılı tanıtım en fazla 5000 karakter olabilir.");
-  if (!Number.isFinite(fiyat) || fiyat < 0) bildir(slug, "hata", "Fiyat sıfır veya pozitif bir sayı olmalıdır.");
   if (demoUrl && !/^https?:\/\/[^\s]+$/.test(demoUrl)) bildir(slug, "hata", "Demo adresi http:// veya https:// ile başlamalıdır.");
   const sektor = await prisma.sector.findUnique({ where: { id: sektorId }, select: { id: true } });
   if (!sektor) bildir(slug, "hata", "Sektör seçin.");
@@ -397,7 +395,6 @@ export async function vitrinKaydetAction(formVerisi: FormData): Promise<void> {
       shortSummary: ozet,
       detailedPitch: tanitim,
       techStack: teknolojiler,
-      basePrice: fiyat,
       sectorId: sektor.id,
       liveDemoUrl: demoUrl || null,
       demoUsername: metin(formVerisi, "demoKullanici") || null,
