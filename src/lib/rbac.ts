@@ -92,6 +92,7 @@ const YOL_IZINLERI: readonly (readonly [string, Permission])[] = [
   ["/panel/erp/bayiler", "partners:manage"],
   ["/panel/erp", "erp:view"],
   ["/api/admin", "users:manage"],
+  ["/api/sunucu", "servers:view"],
 ];
 
 export function requiredPermissionFor(yol: string): Permission | undefined {

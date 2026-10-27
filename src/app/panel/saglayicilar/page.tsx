@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { esitlenebilirMi } from "@/lib/providers";
+import { esitleAction } from "./actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatTarih } from "@/lib/format";
@@ -24,7 +27,7 @@ export default async function SaglayicilarSayfasi() {
         <h1 className="text-2xl font-semibold tracking-tight">Sağlayıcı Hesapları</h1>
         <p className="text-sm text-muted-foreground">
           DigitalOcean, Cloudflare, DomainNameAPI, Natro, OpenRouter ve GitHub hesapları. Anahtarlar şifreli saklanır
-          ve arayüzde yalnızca maskeli ipucu gösterilir. Hesap ekleme ve eşitleme ADIM 2 ile 4'te eklenecek.
+          ve arayüzde yalnızca maskeli ipucu gösterilir. DigitalOcean, Cloudflare ve OpenRouter hesapları "Eşitle" düğmesiyle güncellenir.
         </p>
       </div>
 
@@ -48,6 +51,8 @@ export default async function SaglayicilarSayfasi() {
                   <TableHead className="text-right">Alan Adı</TableHead>
                   <TableHead>Son Eşitleme</TableHead>
                   <TableHead>Durum</TableHead>
+                  <TableHead>Son Sonuç</TableHead>
+                  <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -68,6 +73,17 @@ export default async function SaglayicilarSayfasi() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={h.isActive ? "success" : "secondary"}>{h.isActive ? "Aktif" : "Pasif"}</Badge>
+                    </TableCell>
+                    <TableCell className="max-w-64 text-xs text-muted-foreground">{h.lastSyncStatus ?? "-"}</TableCell>
+                    <TableCell className="text-right">
+                      {esitlenebilirMi(h.kind) && h.credentials ? (
+                        <form action={esitleAction}>
+                          <input type="hidden" name="hesapId" value={h.id} />
+                          <Button type="submit" variant="outline" size="sm">
+                            Eşitle
+                          </Button>
+                        </form>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 ))}
