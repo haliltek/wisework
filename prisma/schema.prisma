@@ -1,0 +1,352 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  SUPER_ADMIN // Sistem Sahibi (Tüm yetkiler)
+  PARTNER     // Ara Bayi (Kısıtlı B2B Portal yetkisi)
+  DEVELOPER   // Geliştirici (proje, dağıtım, sunucu izleme)
+  ACCOUNTING  // Muhasebe (satış, finans, maliyet görünümü)
+  SUPPORT     // Destek (ticket, müşteri, lisans görünümü)
+}
+
+enum ProjectType {
+  WEB_SOFTWARE
+  SAAS_PLATFORM
+  MOBILE_APP
+  DESKTOP_ERP
+}
+
+enum LicenseStatus {
+  ACTIVE    // Aktif
+  SUSPENDED // Askıda (Ödeme Bekliyor - Yazılımı Kilitler)
+  EXPIRED   // Süresi Doldu
+  REVOKED   // İptal Edildi
+}
+
+enum ContainerStatus {
+  RUNNING
+  SLEEPING
+  STOPPED
+  ERROR
+}
+
+model User {
+  id             String     @id @default(cuid())
+  name           String
+  companyName    String?    // Bayi firma adı (Sunum modunda görünür)
+  email          String     @unique
+  phone          String?
+  passwordHash   String
+  role           Role       @default(PARTNER)
+  commissionRate Float      @default(25.0) // Bayi komisyon yüzdesi (%)
+  isActive       Boolean    @default(true)
+  customers      Customer[]
+  sales          Sale[]
+  tickets        Ticket[]
+  deployments    Deployment[]
+  auditLogs      AuditLog[]
+
+  // v2: güvenlik
+  twoFactorEnabled Boolean   @default(false)
+  twoFactorSecret  String?   // AES-256-GCM ile şifreli (src/lib/crypto.ts)
+  lastLoginAt      DateTime?
+
+  createdAt      DateTime   @default(now())
+}
+
+model Sector {
+  id       String    @id @default(cuid())
+  name     String    // Örn: "E-Ticaret", "Sağlık & Klinik", "ERP & Muhasebe"
+  slug     String    @unique
+  icon     String?   // Lucide ikon adı
+  projects Project[]
+}
+
+model Project {
+  id              String          @id @default(cuid())
+  title           String
+  slug            String          @unique
+  type            ProjectType     @default(WEB_SOFTWARE)
+  sectorId        String
+  sector          Sector          @relation(fields: [sectorId], references: [id])
+  shortSummary    String          // Kart üzerindeki kısa Türkçe açıklama
+  detailedPitch   String          @db.Text // Müşteri sunumunda anlatılacak detaylı özellikler
+  techStack       String[]        // ["Next.js", "Node.js", "PostgreSQL", "Docker"]
+  basePrice       Float           // Liste satış fiyatı (TL/USD)
+
+  // Vitrin ve Canlı Demo Bilgileri
+  coverImage      String?
+  galleryImages   String[]
+  videoUrl        String?
+  liveDemoUrl     String?         // Örn: https://klinik.demo.alanadi.com
+  demoUsername    String?
+  demoPassword    String?
+  demoNotes       String?
+
+  // Sunucu & Konteyner Bağlantısı
+  containerName   String?         // Docker konteyner adı
+  sablierGroup    String?         // Uyuyan demo grup adı
+  containerStatus ContainerStatus @default(SLEEPING)
+
+  // Mobil Uygulama Alanları
+  appStoreUrl     String?
+  playStoreUrl    String?
+  apkDownloadUrl  String?
+  latestVersion   String?         @default("1.0.0")
+  forceUpdate     Boolean         @default(false)
+
+  // GİZLİ KASA: Sadece SUPER_ADMIN görebilir!
+  githubRepoUrl   String?
+  dbSeedFileUrl   String?         // Başlangıç .sql veritabanı yedeği
+  sourceZipUrl    String?         // Kaynak kod arşiv paketi
+  envTemplate     String?         @db.Text
+  deployGuide     String?         @db.Text
+
+  isPublished     Boolean         @default(true)
+  sales           Sale[]
+  licenses        License[]
+  saasTenants     SaasTenant[]
+  environments    ProjectEnvironment[]
+  domains         Domain[]
+  createdAt       DateTime        @default(now())
+}
+
+model ServerNode {
+  id          String       @id @default(cuid())
+  name        String       // Örn: "DigitalOcean Ana Droplet - Frankfurt"
+  ipAddress   String
+  sshPort     Int          @default(22)
+  dockerHost  String       @default("unix:///var/run/docker.sock")
+  cpuCores    Int          @default(4)
+  ramTotalGb  Float        @default(8.0)
+  diskTotalGb Float        @default(160.0)
+  isOnline    Boolean      @default(true)
+  tenants     SaasTenant[]
+
+  // v2: çoklu sağlayıcı envanteri
+  kind              ServerKind       @default(VPS)
+  providerAccountId String?
+  providerAccount   ProviderAccount? @relation(fields: [providerAccountId], references: [id])
+  externalId        String?          // Sağlayıcıdaki kimlik (örn: DigitalOcean droplet ID)
+  region            String?
+  monthlyCost       Float?
+  expiresAt         DateTime?        // Hosting/VPS bitiş tarihi (elle girilen sağlayıcılar için)
+  notes             String?          @db.Text
+  environments      ProjectEnvironment[]
+
+  createdAt   DateTime     @default(now())
+}
+
+model SaasTenant {
+  id              String          @id @default(cuid())
+  tenantName      String          // Müşteri kısa adı
+  subdomain       String          @unique // Örn: "akdenizklinik.saas.com"
+  projectId       String
+  project         Project         @relation(fields: [projectId], references: [id])
+  customerId      String
+  customer        Customer        @relation(fields: [customerId], references: [id])
+  serverId        String
+  server          ServerNode      @relation(fields: [serverId], references: [id])
+  containerId     String?         // Docker Container ID
+  dbName          String?         // İzole veritabanı adı
+  planName        String          @default("Profesyonel Paket")
+  monthlyFee      Float
+  status          ContainerStatus @default(RUNNING)
+  nextBillingDate DateTime
+  createdAt       DateTime        @default(now())
+}
+
+model Customer {
+  id          String       @id @default(cuid())
+  companyName String
+  contactName String
+  phone       String
+  email       String?
+  city        String?
+  partnerId   String       // Hangi bayinin müşterisi?
+  partner     User         @relation(fields: [partnerId], references: [id])
+  sales       Sale[]
+  licenses    License[]
+  saasTenants SaasTenant[]
+  createdAt   DateTime     @default(now())
+}
+
+model Sale {
+  id                String   @id @default(cuid())
+  projectId         String
+  project           Project  @relation(fields: [projectId], references: [id])
+  customerId        String
+  customer          Customer @relation(fields: [customerId], references: [id])
+  partnerId         String
+  partner           User     @relation(fields: [partnerId], references: [id])
+  salePrice         Float    // Satış fiyatı
+  partnerCommission Float    // Bayi hakedişi (Otomatik hesaplanır)
+  netCompanyRevenue Float    // Şirkete kalan net tutar
+  status            String   @default("KURULUM_BEKLIYOR") // DEMO_ASAMASI, KURULUM_BEKLIYOR, TAMAMLANDI, IPTAL
+  createdAt         DateTime @default(now())
+}
+
+model License {
+  id            String        @id @default(cuid())
+  licenseKey    String        @unique // LIC-XXXX-XXXX-XXXX
+  projectId     String
+  project       Project       @relation(fields: [projectId], references: [id])
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id])
+  allowedDomain String?       // Domain kilidi
+  allowedIp     String?       // IP kilidi
+  appBundleId   String?       // Mobil uygulama paket kilidi
+  status        LicenseStatus @default(ACTIVE)
+  expiresAt     DateTime?
+  lastPingAt    DateTime?
+  lastPingIp    String?
+  createdAt     DateTime      @default(now())
+}
+
+model Ticket {
+  id        String   @id @default(cuid())
+  subject   String
+  message   String   @db.Text
+  status    String   @default("ACIK") // ACIK, ISLEMDE, COZULDU
+  priority  String   @default("NORMAL") // DUSUK, NORMAL, ACIL
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+// =====================================================================
+// v2: Tümleşik yönetim katmanı (sağlayıcılar, alan adları, ortamlar,
+// dağıtımlar, denetim kaydı)
+// =====================================================================
+
+enum ServerKind {
+  VPS
+  HOSTING   // Paylaşımlı / bayi hosting (örn. Natro); Docker yoktur
+  DEDICATED
+}
+
+enum ProviderKind {
+  DIGITALOCEAN
+  CLOUDFLARE
+  DOMAINNAMEAPI
+  NATRO
+  OPENROUTER
+  GITHUB
+  OTHER
+}
+
+enum SyncMode {
+  AUTO   // API ile otomatik eşitlenir
+  MANUAL // Kayıtlar elle girilir (API yoksa)
+}
+
+enum DomainStatus {
+  ACTIVE
+  EXPIRED
+  TRANSFERRING
+}
+
+enum DeployStatus {
+  QUEUED
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+// Dış sağlayıcı hesabı. Kimlik bilgileri YALNIZCA şifreli saklanır.
+model ProviderAccount {
+  id             String       @id @default(cuid())
+  kind           ProviderKind
+  label          String       // Örn: "DigitalOcean - Ana Hesap"
+  syncMode       SyncMode     @default(MANUAL)
+  credentials    String?      @db.Text // AES-256-GCM paketi (v1:iv:etiket:veri); düz metin asla yazılmaz
+  credentialHint String?      // Arayüzde gösterilen ipucu (örn: ••••a1b2)
+  lastSyncAt     DateTime?
+  lastSyncStatus String?
+  isActive       Boolean      @default(true)
+  servers        ServerNode[]
+  domains        Domain[]
+  createdAt      DateTime     @default(now())
+}
+
+model Domain {
+  id                String           @id @default(cuid())
+  name              String           @unique
+  providerAccountId String?          // Alan adının kayıtlı olduğu firma (örn: DomainNameAPI, Natro)
+  providerAccount   ProviderAccount? @relation(fields: [providerAccountId], references: [id])
+  projectId         String?
+  project           Project?         @relation(fields: [projectId], references: [id])
+  registeredAt      DateTime?
+  expiresAt         DateTime?
+  autoRenew         Boolean          @default(false)
+  renewalCost       Float?
+  nameservers       String[]
+  cloudflareZoneId  String?
+  sslExpiresAt      DateTime?
+  status            DomainStatus     @default(ACTIVE)
+  notes             String?          @db.Text
+  environments      ProjectEnvironment[]
+  createdAt         DateTime         @default(now())
+}
+
+// Proje x ortam: hangi proje, hangi sunucuda, hangi alan adıyla çalışıyor ve nasıl dağıtılıyor
+model ProjectEnvironment {
+  id               String        @id @default(cuid())
+  projectId        String
+  project          Project       @relation(fields: [projectId], references: [id])
+  name             String        // "production" / "staging" (arayüzde Üretim / Hazırlık)
+  serverId         String
+  server           ServerNode    @relation(fields: [serverId], references: [id])
+  domainId         String?
+  domain           Domain?       @relation(fields: [domainId], references: [id])
+  containerName    String?
+  branch           String        @default("main")
+  workflowFile     String        @default("deploy.yml") // "Dağıt" butonunun tetiklediği GitHub Actions iş akışı
+  healthUrl        String?
+  currentVersion   String?
+  lastDeployAt     DateTime?
+  lastDeployStatus DeployStatus?
+  deployments      Deployment[]
+  createdAt        DateTime      @default(now())
+
+  @@unique([projectId, name])
+}
+
+model Deployment {
+  id            String             @id @default(cuid())
+  environmentId String
+  environment   ProjectEnvironment @relation(fields: [environmentId], references: [id])
+  triggeredById String?
+  triggeredBy   User?              @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
+  ref           String             // Dal adı veya commit
+  status        DeployStatus       @default(QUEUED)
+  githubRunId   String?
+  runUrl        String?
+  startedAt     DateTime           @default(now())
+  finishedAt    DateTime?
+
+  @@index([environmentId, startedAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String   // Örn: "deploy.start", "user.role_change"
+  entityType String
+  entityId   String?
+  summary    String   // Türkçe okunabilir özet
+  ip         String?
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+}

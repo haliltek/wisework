@@ -1,0 +1,19 @@
+# bağımlılıklar
+node_modules/
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# ortam dosyaları (gizli bilgiler)
+.env
+.env.*
+!.env.example
+
+# diğer
+*.tsbuildinfo
+.DS_Store
+npm-debug.log*
+_silinecek/
+*.zip
