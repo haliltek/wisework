@@ -358,3 +358,63 @@ export async function konteynerdenIceAktarAction(formVerisi: FormData): Promise<
   const mesaj = eklenen.length > 0 ? `${eklenen.length} proje içe aktarıldı.` : "Seçilen gruplar zaten kayıtlı.";
   redirect("/panel/projeler?ok=" + encodeURIComponent(mesaj));
 }
+
+// ---------- Vitrin bilgilerini kaydetme ----------
+export async function vitrinKaydetAction(formVerisi: FormData): Promise<void> {
+  const kullanici = await requirePermission("projects:manage");
+  const projeId = metin(formVerisi, "projeId");
+  const proje = await prisma.project.findUnique({ where: { id: projeId }, select: { slug: true } });
+  if (!proje) redirect("/panel/projeler");
+  const slug = proje.slug;
+
+  const baslik = metin(formVerisi, "baslik");
+  const ozet = metin(formVerisi, "ozet");
+  const tanitim = metin(formVerisi, "tanitim");
+  const demoUrl = metin(formVerisi, "demoUrl");
+  const fiyat = Number(metin(formVerisi, "fiyat").replace(",", "."));
+  const sektorId = metin(formVerisi, "sektorId");
+
+  if (!baslik || baslik.length > 120) bildir(slug, "hata", "Proje adı zorunludur (en fazla 120 karakter).");
+  if (!ozet || ozet.length > 200) bildir(slug, "hata", "Kısa açıklama zorunludur (en fazla 200 karakter).");
+  if (tanitim.length > 5000) bildir(slug, "hata", "Ayrıntılı tanıtım en fazla 5000 karakter olabilir.");
+  if (!Number.isFinite(fiyat) || fiyat < 0) bildir(slug, "hata", "Fiyat sıfır veya pozitif bir sayı olmalıdır.");
+  if (demoUrl && !/^https?:\/\/[^\s]+$/.test(demoUrl)) bildir(slug, "hata", "Demo adresi http:// veya https:// ile başlamalıdır.");
+  const sektor = await prisma.sector.findUnique({ where: { id: sektorId }, select: { id: true } });
+  if (!sektor) bildir(slug, "hata", "Sektör seçin.");
+
+  const teknolojiler = metin(formVerisi, "teknolojiler")
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .slice(0, 15)
+    .map((t) => t.slice(0, 30));
+
+  const yayinda = formVerisi.get("yayinda") === "on";
+  await prisma.project.update({
+    where: { id: projeId },
+    data: {
+      title: baslik,
+      shortSummary: ozet,
+      detailedPitch: tanitim,
+      techStack: teknolojiler,
+      basePrice: fiyat,
+      sectorId: sektor.id,
+      liveDemoUrl: demoUrl || null,
+      demoUsername: metin(formVerisi, "demoKullanici") || null,
+      demoPassword: metin(formVerisi, "demoSifre") || null,
+      demoNotes: metin(formVerisi, "demoNot") || null,
+      isPublished: yayinda,
+    },
+  });
+  // Denetim özetine demo şifresi gibi gizli değerler yazılmaz
+  await writeAudit({
+    userId: kullanici.id,
+    action: "project.showcase_update",
+    entityType: "Project",
+    entityId: projeId,
+    summary: `${baslik} projesinin vitrin bilgileri güncellendi (vitrinde: ${yayinda ? "yayında" : "yayında değil"})`,
+  });
+  revalidatePath(`/panel/projeler/${slug}`);
+  revalidatePath("/panel/vitrin");
+  bildir(slug, "ok", yayinda ? "Kaydedildi. Proje vitrinde yayında." : "Kaydedildi. Proje vitrinde görünmüyor.");
+}

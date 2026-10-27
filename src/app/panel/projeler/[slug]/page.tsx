@@ -21,7 +21,7 @@ import { DAGITIM_DURUMLARI, ORTAM_ETIKETLERI, PROJE_TURLERI } from "@/lib/labels
 import { prisma } from "@/lib/prisma";
 import { hasPermission } from "@/lib/rbac";
 import { requirePermission } from "@/lib/session";
-import { dagitAction, dagitimDurumunuYenile, depoBaglaAction, ortamEkleAction } from "../actions";
+import { dagitAction, dagitimDurumunuYenile, depoBaglaAction, ortamEkleAction, vitrinKaydetAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +72,7 @@ export default async function ProjeDetaySayfasi({
   const depoGorebilir = hasPermission(kullanici.role, "code:view");
   const depo = repoCoz(proje.githubRepoUrl);
 
-  const [dagitimlar, sunucular, alanAdlari, saglik] = await Promise.all([
+  const [dagitimlar, sunucular, alanAdlari, saglik, sektorler] = await Promise.all([
     prisma.deployment.findMany({
       where: { environment: { projectId: proje.id } },
       orderBy: { startedAt: "desc" },
@@ -82,6 +82,7 @@ export default async function ProjeDetaySayfasi({
     yonetebilir ? prisma.serverNode.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
     yonetebilir ? prisma.domain.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
     Promise.all(proje.environments.map((o) => saglikKontrol(o.healthUrl))),
+    yonetebilir ? prisma.sector.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
   ]);
 
   // GitHub bilgileri yalnızca depo kasasına erişimi olanlara gösterilir
@@ -308,6 +309,83 @@ export default async function ProjeDetaySayfasi({
                 </Button>
               </form>
             ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {yonetebilir ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Vitrin Bilgileri</CardTitle>
+            <CardDescription>
+              Bu bilgiler Ürün & Demo Vitrini'nde bayilere gösterilir. Proje yalnızca "Vitrinde yayınla" işaretliyse görünür.
+              Demo kullanıcı ve şifresi bayilere açıktır; gerçek bir hesap bilgisi girmeyin.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form action={vitrinKaydetAction} className="grid gap-4 sm:grid-cols-2">
+              <input type="hidden" name="projeId" value={proje.id} />
+              <div className="space-y-1.5">
+                <Label htmlFor="v-baslik">Proje adı</Label>
+                <Input id="v-baslik" name="baslik" defaultValue={proje.title} required maxLength={120} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="v-sektor">Sektör</Label>
+                <select id="v-sektor" name="sektorId" className={SECIM_SINIFI} defaultValue={proje.sectorId}>
+                  {sektorler.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="v-ozet">Kısa açıklama (kartta görünür)</Label>
+                <Input id="v-ozet" name="ozet" defaultValue={proje.shortSummary} required maxLength={200} />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="v-tanitim">Ayrıntılı tanıtım (müşteri sunumunda anlatılacak özellikler)</Label>
+                <textarea
+                  id="v-tanitim"
+                  name="tanitim"
+                  rows={6}
+                  maxLength={5000}
+                  defaultValue={proje.detailedPitch}
+                  className="flex w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="v-tek">Teknolojiler (virgülle ayırın)</Label>
+                <Input id="v-tek" name="teknolojiler" defaultValue={proje.techStack.join(", ")} placeholder="Next.js, PostgreSQL, Docker" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="v-fiyat">Liste fiyatı</Label>
+                <Input id="v-fiyat" name="fiyat" inputMode="decimal" defaultValue={String(proje.basePrice)} />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="v-demo">Canlı demo adresi</Label>
+                <Input id="v-demo" name="demoUrl" defaultValue={proje.liveDemoUrl ?? ""} placeholder="http://142.93.104.78:8088" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="v-dk">Demo kullanıcı adı</Label>
+                <Input id="v-dk" name="demoKullanici" defaultValue={proje.demoUsername ?? ""} autoComplete="off" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="v-ds">Demo şifresi</Label>
+                <Input id="v-ds" name="demoSifre" defaultValue={proje.demoPassword ?? ""} autoComplete="off" />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="v-dn">Demo notu</Label>
+                <Input id="v-dn" name="demoNot" defaultValue={proje.demoNotes ?? ""} maxLength={300} />
+              </div>
+              <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                <input type="checkbox" name="yayinda" defaultChecked={proje.isPublished} />
+                Vitrinde yayınla
+              </label>
+              <div className="sm:col-span-2">
+                <Button type="submit">Vitrin bilgilerini kaydet</Button>
+              </div>
+            </form>
           </CardContent>
         </Card>
       ) : null}
