@@ -86,12 +86,12 @@ async function bellekOku(id: string): Promise<{ kullanilanMb: number; limitMb: n
   }
 }
 
-export async function konteynerleriListele(): Promise<KonteynerOzeti[]> {
+export async function konteynerleriListele(bellekOlc = true): Promise<KonteynerOzeti[]> {
   const ham = await dockerGet<HamKonteyner[]>("/containers/json?all=true");
 
   const sonuc = await Promise.all(
     ham.map(async (k): Promise<KonteynerOzeti> => {
-      const bellek = k.State === "running" ? await bellekOku(k.Id) : null;
+      const bellek = bellekOlc && k.State === "running" ? await bellekOku(k.Id) : null;
       return {
         id: k.Id,
         ad: (k.Names[0] ?? k.Id).replace(/^\//, ""),
@@ -133,4 +133,38 @@ export async function dockerOzetiAl(): Promise<DockerOzeti> {
     bellekToplamGb: b.MemTotal / 1024 ** 3,
     cekirdek: b.NCPU,
   };
+}
+
+export interface KonteynerGrubu {
+  anahtar: string; // docker compose proje adı; yoksa konteyner adı
+  konteynerler: KonteynerOzeti[];
+  calisan: number;
+}
+
+// Konteynerleri compose projesine göre gruplar (compose dışı konteyner kendi grubudur)
+export function konteynerGruplari(liste: KonteynerOzeti[]): KonteynerGrubu[] {
+  const harita = new Map<string, KonteynerOzeti[]>();
+  for (const k of liste) {
+    const anahtar = k.projeAdi ?? k.ad;
+    const mevcut = harita.get(anahtar);
+    if (mevcut) mevcut.push(k);
+    else harita.set(anahtar, [k]);
+  }
+  return Array.from(harita.entries())
+    .map(([anahtar, konteynerler]) => ({
+      anahtar,
+      konteynerler,
+      calisan: konteynerler.filter((k) => k.durumKodu === "RUNNING").length,
+    }))
+    .sort((a, b) => a.anahtar.localeCompare(b.anahtar));
+}
+
+// "sigortamdijital" -> "Sigortamdijital", "altin-alarm" -> "Altin Alarm"
+export function grupBasligi(anahtar: string): string {
+  return anahtar
+    .replace(/[-_]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((k) => k.charAt(0).toUpperCase() + k.slice(1))
+    .join(" ");
 }

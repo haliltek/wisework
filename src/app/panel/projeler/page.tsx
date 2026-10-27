@@ -11,7 +11,9 @@ import { repoCoz } from "@/lib/github";
 import { prisma } from "@/lib/prisma";
 import { hasPermission } from "@/lib/rbac";
 import { requirePermission } from "@/lib/session";
-import { projeEkleAction } from "./actions";
+import { konteynerGruplari, konteynerleriListele, type KonteynerGrubu } from "@/lib/docker";
+import { KONTEYNER_DURUMLARI } from "@/lib/labels";
+import { konteynerdenIceAktarAction, projeEkleAction } from "./actions";
 
 export const metadata: Metadata = { title: "Projeler" };
 export const dynamic = "force-dynamic";
@@ -36,6 +38,21 @@ export default async function ProjelerSayfasi({
     }),
     yonetebilir ? prisma.sector.findMany({ orderBy: { name: "asc" } }) : Promise.resolve([]),
   ]);
+
+  // Sunucuda çalışıp henüz projeye dönüşmemiş konteyner grupları (yalnızca okunur)
+  let iceAktarilabilir: KonteynerGrubu[] = [];
+  let dockerHatasi: string | null = null;
+  if (yonetebilir) {
+    try {
+      const kayitliSluglar = new Set(projeler.map((p) => p.slug));
+      const harita: Record<string, string> = { ç: "c", ğ: "g", ı: "i", ö: "o", ş: "s", ü: "u" };
+      const slugla = (a: string) =>
+        a.toLowerCase().replace(/[çğıöşü]/g, (h) => harita[h] ?? h).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "proje";
+      iceAktarilabilir = konteynerGruplari(await konteynerleriListele(false)).filter((g) => !kayitliSluglar.has(slugla(g.anahtar)));
+    } catch {
+      dockerHatasi = "Docker'a ulaşılamadı; sunucudaki konteynerler listelenemiyor.";
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -113,6 +130,72 @@ export default async function ProjelerSayfasi({
           )}
         </CardContent>
       </Card>
+
+      {yonetebilir ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Sunucudan İçe Aktar</CardTitle>
+            <CardDescription>
+              Sunucuda çalışan Docker projelerinden henüz panele eklenmemiş olanlar. İçe aktarma yalnızca kayıt oluşturur;
+              konteynerlere dokunmaz. Çalışmayan gruplar varsayılan olarak seçili gelmez.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {dockerHatasi ? (
+              <p className="py-4 text-sm text-muted-foreground">{dockerHatasi}</p>
+            ) : iceAktarilabilir.length === 0 ? (
+              <p className="py-4 text-sm text-muted-foreground">İçe aktarılacak yeni konteyner grubu yok.</p>
+            ) : (
+              <form action={konteynerdenIceAktarAction} className="space-y-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-10" />
+                      <TableHead>Grup</TableHead>
+                      <TableHead>Konteynerler</TableHead>
+                      <TableHead>Durum</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {iceAktarilabilir.map((g) => {
+                      const durum = KONTEYNER_DURUMLARI[g.calisan > 0 ? "RUNNING" : "STOPPED"];
+                      return (
+                        <TableRow key={g.anahtar}>
+                          <TableCell>
+                            <input type="checkbox" name="grup" value={g.anahtar} defaultChecked={g.calisan > 0} aria-label={`${g.anahtar} grubunu seç`} />
+                          </TableCell>
+                          <TableCell className="font-medium">{g.anahtar}</TableCell>
+                          <TableCell className="max-w-96 truncate text-xs text-muted-foreground" title={g.konteynerler.map((k) => k.ad).join(", ")}>
+                            {g.konteynerler.map((k) => k.ad).join(", ")}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={durum.renk}>
+                              {durum.etiket} ({g.calisan}/{g.konteynerler.length})
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="min-w-56 space-y-1.5">
+                    <Label htmlFor="iceSektor">Sektör (hepsi için)</Label>
+                    <select id="iceSektor" name="sektorId" className={SECIM_SINIFI} required>
+                      {sektorler.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <Button type="submit">Seçilenleri içe aktar</Button>
+                </div>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {yonetebilir ? (
         <Card>

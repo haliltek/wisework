@@ -5,6 +5,7 @@ import type { DeployStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { writeAudit } from "@/lib/audit";
+import { grupBasligi, konteynerGruplari, konteynerleriListele } from "@/lib/docker";
 import {
   calismaDurumu,
   calismayiBul,
@@ -292,4 +293,68 @@ export async function projeEkleAction(formVerisi: FormData): Promise<void> {
   });
   revalidatePath("/panel/projeler");
   redirect(`/panel/projeler/${slug}`);
+}
+
+// ---------- Sunucudaki konteynerlerden proje içe aktarma (yalnızca okuma; konteynerlere dokunulmaz) ----------
+const YEREL_SUNUCU_IP = process.env.LOCAL_SERVER_IP ?? "142.93.104.78";
+
+export async function konteynerdenIceAktarAction(formVerisi: FormData): Promise<void> {
+  const kullanici = await requirePermission("projects:manage");
+  const secilenler = formVerisi.getAll("grup").map(String);
+  const sektorId = metin(formVerisi, "sektorId");
+  if (secilenler.length === 0) redirect("/panel/projeler?hata=" + encodeURIComponent("İçe aktarılacak en az bir grup seçin."));
+  const sektor = await prisma.sector.findUnique({ where: { id: sektorId }, select: { id: true } });
+  if (!sektor) redirect("/panel/projeler?hata=" + encodeURIComponent("Sektör seçin."));
+
+  let gruplar: ReturnType<typeof konteynerGruplari> = [];
+  try {
+    gruplar = konteynerGruplari(await konteynerleriListele(false));
+  } catch {
+    redirect("/panel/projeler?hata=" + encodeURIComponent("Docker'a ulaşılamadı. Docker vekil konteynerinin çalıştığını kontrol edin."));
+  }
+
+  const sunucu = await prisma.serverNode.findFirst({ where: { ipAddress: YEREL_SUNUCU_IP }, select: { id: true } });
+  const eklenen: string[] = [];
+
+  for (const anahtar of secilenler) {
+    const grup = gruplar.find((g) => g.anahtar === anahtar); // yalnızca gerçekten var olan gruplar kabul edilir
+    if (!grup) continue;
+    const slug = slugOlustur(anahtar);
+    if (await prisma.project.findUnique({ where: { slug }, select: { id: true } })) continue;
+
+    const ilkKonteyner = grup.konteynerler.find((k) => k.durumKodu === "RUNNING") ?? grup.konteynerler[0];
+    const proje = await prisma.project.create({
+      data: {
+        title: grupBasligi(anahtar),
+        slug,
+        type: "WEB_SOFTWARE",
+        sectorId: sektor.id,
+        shortSummary: `Sunucuda çalışan ${grup.konteynerler.length} konteyner: ${grup.konteynerler.map((k) => k.ad).join(", ")}`.slice(0, 200),
+        detailedPitch: "",
+        techStack: [],
+        basePrice: 0,
+        containerName: ilkKonteyner?.ad ?? null,
+        containerStatus: grup.calisan > 0 ? "RUNNING" : "STOPPED",
+        isPublished: false,
+      },
+    });
+    if (sunucu) {
+      await prisma.projectEnvironment.create({
+        data: { projectId: proje.id, name: "production", serverId: sunucu.id, containerName: ilkKonteyner?.ad ?? null },
+      });
+    }
+    eklenen.push(proje.title);
+  }
+
+  if (eklenen.length > 0) {
+    await writeAudit({
+      userId: kullanici.id,
+      action: "project.import",
+      entityType: "Project",
+      summary: `Sunucudaki konteynerlerden ${eklenen.length} proje içe aktarıldı: ${eklenen.join(", ")}`,
+    });
+  }
+  revalidatePath("/panel/projeler");
+  const mesaj = eklenen.length > 0 ? `${eklenen.length} proje içe aktarıldı.` : "Seçilen gruplar zaten kayıtlı.";
+  redirect("/panel/projeler?ok=" + encodeURIComponent(mesaj));
 }
