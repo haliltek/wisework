@@ -21,7 +21,13 @@ jobs:
         run: |
           set -e
           mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          # Windows satır sonlarını (\r) temizle, anahtarın sonuna satır sonu ekle
+          printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          # Anahtar geçerli mi? Değilse açık bir hata ver
+          if ! ssh-keygen -y -f ~/.ssh/id_ed25519 > /dev/null 2>&1; then
+            echo "HATA: DEPLOY_SSH_KEY geçersiz. Secret içeriğini yeniden kaydedin (özel anahtarın tamamı, BEGIN ve END satırlarıyla)."
+            exit 1
+          fi
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-          ssh -i ~/.ssh/id_ed25519 deploy@"$DEPLOY_HOST" "sudo /usr/local/sbin/wise-deploy.sh"
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes deploy@"$DEPLOY_HOST" "sudo /usr/local/sbin/wise-deploy.sh"
