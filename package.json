@@ -14,7 +14,8 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
-    "kurulum": "node scripts/kurulum.mjs"
+    "kurulum": "node scripts/kurulum.mjs",
+    "deploy:remote": "node scripts/deploy-remote.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
