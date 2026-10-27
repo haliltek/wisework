@@ -48,9 +48,9 @@ export const authConfig = {
       return token;
     },
     session({ session, token }) {
-      session.user.id = token.id;
+      session.user.id = token.id as string;
       session.user.role = token.role as AppRole;
-      session.user.companyName = token.companyName ?? null;
+      session.user.companyName = (token.companyName as string | null | undefined) ?? null;
       return session;
     },
   },
