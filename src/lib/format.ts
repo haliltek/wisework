@@ -26,3 +26,16 @@ export function formatSayi(sayi: number): string {
 export function formatTarih(tarih: Date | string): string {
   return tarihBicimi.format(new Date(tarih));
 }
+
+const tarihSaatBicimi = new Intl.DateTimeFormat("tr-TR", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "Europe/Istanbul",
+});
+
+export function formatTarihSaat(tarih: Date | string): string {
+  return tarihSaatBicimi.format(new Date(tarih));
+}

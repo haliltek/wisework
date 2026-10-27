@@ -11,13 +11,15 @@ echo "  2) OpenRouter (yönetim anahtarı)"
 echo "  3) Cloudflare (salt okunur API token)"
 echo "  4) DomainNameAPI (Bayi ID + API anahtarı)"
 echo "  5) cPanel/WHM - OWeb reseller hosting (adres + kullanıcı + token)"
-printf "Seçim (1-5): "
+echo "  6) GitHub (ince yetkili token: Contents ve Metadata okuma, Actions okuma/yazma)"
+printf "Seçim (1-6): "
 read -r SECIM
 case "$SECIM" in
   1) KIND=DIGITALOCEAN; HESAP_ID=do-account-main; ETIKET="DigitalOcean - Ana Hesap" ;;
   2) KIND=OPENROUTER; HESAP_ID=openrouter-main; ETIKET="OpenRouter - Ana Hesap" ;;
   3) KIND=CLOUDFLARE; HESAP_ID=cloudflare-main; ETIKET="Cloudflare - Ana Hesap" ;;
   5) KIND=OTHER; HESAP_ID=whm-oweb; ETIKET="OWeb WHM - Reseller Hosting" ;;
+  6) KIND=GITHUB; HESAP_ID=github-main; ETIKET="GitHub - Ana Hesap" ;;
   4) KIND=DOMAINNAMEAPI; HESAP_ID=domainnameapi-main; ETIKET="DomainNameAPI - Ana Hesap" ;;
   *) echo "Geçersiz seçim."; exit 1 ;;
 esac

@@ -59,3 +59,15 @@ export const DAGITIM_DURUMLARI: Record<string, { etiket: string; renk: RozetReng
 export function satisDurumu(kod: string) {
   return SATIS_DURUMLARI[kod] ?? { etiket: kod, renk: "outline" as RozetRengi };
 }
+
+export const PROJE_TURLERI: Record<string, string> = {
+  WEB_SOFTWARE: "Web Yazılımı",
+  SAAS_PLATFORM: "SaaS Platformu",
+  MOBILE_APP: "Mobil Uygulama",
+  DESKTOP_ERP: "Masaüstü ERP",
+};
+
+export const ORTAM_ETIKETLERI: Record<string, string> = {
+  production: "Üretim",
+  staging: "Hazırlık",
+};
