@@ -1,0 +1,27 @@
+# Wise Software: sunucuya dağıtım iş akışı.
+# Panelin "Dağıt" butonu bu iş akışını GitHub API üzerinden tetikler.
+# Sunucuya yalnızca kısıtlı "deploy" kullanıcısıyla bağlanır; o kullanıcı
+# yalnızca /usr/local/sbin/wise-deploy.sh betiğini root yetkisiyle çalıştırabilir.
+name: Dağıt
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dagit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sunucuya bağlan ve dağıt
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -e
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_ed25519 deploy@"$DEPLOY_HOST" "sudo /usr/local/sbin/wise-deploy.sh"
